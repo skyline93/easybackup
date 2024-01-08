@@ -1,8 +1,8 @@
 build:
 	go build -o easybackup cmd/*
 
-install:
-	mv easybackup ~/go/bin
+install: build
+	mv ./easybackup $$GOPATH/bin
 
 clean:
 	rm -f easybackup

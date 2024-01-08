@@ -14,6 +14,10 @@ var cmdRoot = &cobra.Command{
 	},
 }
 
+func init() {
+	cobra.OnInitialize(initConfig)
+}
+
 func main() {
 	if err := cmdRoot.Execute(); err != nil {
 		os.Exit(1)

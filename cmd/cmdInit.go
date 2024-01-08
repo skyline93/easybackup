@@ -30,6 +30,11 @@ var cmdInit = &cobra.Command{
 			fmt.Printf("err: %s\n", err)
 			os.Exit(1)
 		}
+
+		repo := Repo{Name: r.Name, Path: r.Path}
+		if err := addRepo(&repo); err != nil {
+			panic(err)
+		}
 	},
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -10,7 +11,7 @@ import (
 )
 
 var cmdList = &cobra.Command{
-	Use:   "list backupset -p /data/backup/repo1",
+	Use:   "list backupset -r repo1",
 	Short: "List backup sets in repository",
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
@@ -22,15 +23,28 @@ var cmdBackupSet = &cobra.Command{
 	Use:   "backupset",
 	Short: "backupset",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := listBackupSets(listOptions.RepoPath); err != nil {
+		r := getRepo(listOptions.Repo)
+		if r == nil {
+			panic(errors.New("repo is not found"))
+		}
+
+		if err := listBackupSets(r.Path); err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
 		}
 	},
 }
 
+var cmdRepos = &cobra.Command{
+	Use:   "repo",
+	Short: "repo",
+	Run: func(cmd *cobra.Command, args []string) {
+		listRepos()
+	},
+}
+
 type ListOptions struct {
-	RepoPath string
+	Repo string
 }
 
 var listOptions ListOptions
@@ -38,11 +52,12 @@ var listOptions ListOptions
 func init() {
 	cmdRoot.AddCommand(cmdList)
 	cmdList.AddCommand(cmdBackupSet)
+	cmdList.AddCommand(cmdRepos)
 
 	f := cmdBackupSet.Flags()
-	f.StringVarP(&listOptions.RepoPath, "repo_path", "p", "", "repo path")
+	f.StringVarP(&listOptions.Repo, "repo", "r", "", "repo name")
 
-	cmdBackupSet.MarkFlagRequired("repo_path")
+	cmdBackupSet.MarkFlagRequired("repo")
 }
 
 func listBackupSets(repoPath string) error {
@@ -65,4 +80,16 @@ func listBackupSets(repoPath string) error {
 	pterm.DefaultTable.WithHasHeader().WithData(items).Render()
 
 	return nil
+}
+
+func listRepos() {
+	repos := getRepos()
+
+	items := pterm.TableData{{"Name", "Path"}}
+	for _, r := range repos {
+		item := []string{r.Name, r.Path}
+		items = append(items, item)
+	}
+
+	pterm.DefaultTable.WithHasHeader().WithData(items).Render()
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -10,11 +11,16 @@ import (
 )
 
 var cmdBackup = &cobra.Command{
-	Use:   "backup -p /data/backup/repo1 -t full",
+	Use:   "backup -r repo1 -t full",
 	Short: "Take a backup",
 	Run: func(cmd *cobra.Command, args []string) {
+		r := getRepo(backupOptions.Repo)
+		if r == nil {
+			panic(errors.New("repo is not found"))
+		}
+
 		repo := repository.Repository{}
-		if err := repository.LoadRepository(&repo, backupOptions.RepoPath); err != nil {
+		if err := repository.LoadRepository(&repo, r.Path); err != nil {
 			fmt.Printf("load repo error: %s", err)
 			os.Exit(1)
 		}
@@ -29,7 +35,7 @@ var cmdBackup = &cobra.Command{
 
 type BackupOptions struct {
 	BackupType string
-	RepoPath   string
+	Repo       string
 }
 
 var backupOptions BackupOptions
@@ -39,8 +45,8 @@ func init() {
 
 	f := cmdBackup.Flags()
 	f.StringVarP(&backupOptions.BackupType, "backup_type", "t", "full", "backup type")
-	f.StringVarP(&backupOptions.RepoPath, "repo_path", "p", "", "repo path")
+	f.StringVarP(&backupOptions.Repo, "repo", "r", "", "repo")
 
 	cmdBackup.MarkFlagRequired("backup_type")
-	cmdBackup.MarkFlagRequired("repo_path")
+	cmdBackup.MarkFlagRequired("repo")
 }
