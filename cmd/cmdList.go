@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/pterm/pterm"
-	"github.com/skyline93/mysql-xtrabackup/internal/repository"
+	"github.com/skyline93/easybackup/internal/repository"
 	"github.com/spf13/cobra"
 )
 

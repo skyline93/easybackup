@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/skyline93/mysql-xtrabackup/internal/mysql"
-	"github.com/skyline93/mysql-xtrabackup/internal/repository"
+	"github.com/skyline93/easybackup/internal/mysql"
+	"github.com/skyline93/easybackup/internal/repository"
 	"github.com/spf13/cobra"
 )
 

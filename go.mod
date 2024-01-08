@@ -1,10 +1,11 @@
-module github.com/skyline93/mysql-xtrabackup
+module github.com/skyline93/easybackup
 
 go 1.21
 
 require (
 	github.com/google/uuid v1.4.0
 	github.com/pterm/pterm v0.12.74
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	gopkg.in/ini.v1 v1.67.0
 )

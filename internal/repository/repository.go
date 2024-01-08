@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	"github.com/skyline93/mysql-xtrabackup/internal/stor"
+	"github.com/skyline93/easybackup/internal/stor"
 )
 
 const (

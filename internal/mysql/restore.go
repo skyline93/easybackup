@@ -2,14 +2,15 @@ package mysql
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
-	"github.com/skyline93/mysql-xtrabackup/internal/repository"
+	"github.com/skyline93/easybackup/internal/log"
+
+	"github.com/skyline93/easybackup/internal/repository"
 	"gopkg.in/ini.v1"
 )
 
@@ -30,7 +31,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 	defer func() {
 		if err != nil {
 			cmd := exec.Command("sudo", "rm", "-rf", targetPath)
-			log.Printf("run cmd: %s", cmd)
+			log.Infof("run cmd: %s", cmd)
 			if err = cmd.Run(); err != nil {
 				return
 			}
@@ -63,7 +64,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 
 		// 拷贝文件
 		cmd := exec.Command("cp", "-r", filepath.Join(repo.DataPath(), bs.Id), targetSubPath)
-		log.Printf("run cmd: %s", cmd)
+		log.Infof("run cmd: %s", cmd)
 		if err = cmd.Run(); err != nil {
 			return err
 		}
@@ -74,7 +75,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 			"--decompress", "--remove-original",
 			fmt.Sprintf("--target-dir=%s", targetSubPath),
 		)
-		log.Printf("run cmd: %s", cmd)
+		log.Infof("run cmd: %s", cmd)
 		if err = cmd.Run(); err != nil {
 			return err
 		}
@@ -90,7 +91,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 		}
 
 		cmd = exec.Command(filepath.Join(repo.Config.BinPath, "xtrabackup"), args...)
-		log.Printf("run cmd: %s", cmd)
+		log.Infof("run cmd: %s", cmd)
 		if err = cmd.Run(); err != nil {
 			return err
 		}
@@ -168,14 +169,14 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 	}
 
 	cmd = exec.Command("sudo", "-u", "mysql", filepath.Join(mysqlPath, "bin/mysqld_safe"), fmt.Sprintf("--defaults-file=%s", configPath))
-	log.Printf("run cmd: %s", cmd)
+	log.Infof("run cmd: %s", cmd)
 	if err = cmd.Start(); err != nil {
 		return err
 	}
 
 	time.Sleep(time.Second * 30)
 
-	log.Printf("restore completed\nport: %d", freePort)
+	log.Infof("restore completed\nport: %d", freePort)
 	return nil
 }
 

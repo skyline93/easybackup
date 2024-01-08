@@ -3,7 +3,6 @@ package mysql
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skyline93/mysql-xtrabackup/internal/repository"
+	"github.com/skyline93/easybackup/internal/log"
+
+	"github.com/skyline93/easybackup/internal/repository"
 )
 
 type Backuper struct {
@@ -33,12 +34,12 @@ func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err e
 		if err != nil {
 			return err
 		}
-		log.Printf("create path: %s", targetPath)
+		log.Infof("create path: %s", targetPath)
 	}
 
 	defer func() {
 		if err != nil {
-			log.Printf("backup failed, err: %s", err)
+			log.Infof("backup failed, err: %s", err)
 			os.RemoveAll(targetPath)
 		}
 	}()
@@ -72,24 +73,9 @@ func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err e
 
 	args := append(append(backupArgs, []string{"|"}...), streamArgs...)
 
-	xtraLogPath, err := filepath.Abs(fmt.Sprintf("logs/xtrabackup-%s.log", time.Now().Format("20060102150405")))
-	if err != nil {
-		return err
-	}
-
-	log.Printf("log path: %s", xtraLogPath)
-	logFile, err := os.Create(xtraLogPath)
-	if err != nil {
-		return err
-	}
-	defer logFile.Close()
-
 	backupTime := time.Now().Format("2006-01-02 15:04:05")
 	cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", repo.Config.DbUser, repo.Config.DbHostName), strings.Join(args, " "))
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-
-	log.Printf("cmd: %s", cmd.String())
+	log.Infof("cmd: %s", cmd.String())
 	if err = cmd.Run(); err != nil {
 		return err
 	}
@@ -118,7 +104,7 @@ func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err e
 		return err
 	}
 
-	log.Printf("backup completed.\nbackupset: %s\nfrom_lsn: %s\nto_lsn: %s\nsize: %dbyte", bs.Id, bs.FromLSN, bs.ToLSN, bs.Size)
+	log.Infof("backup completed.\nbackupset: %s\nfrom_lsn: %s\nto_lsn: %s\nsize: %dbyte", bs.Id, bs.FromLSN, bs.ToLSN, bs.Size)
 	return nil
 }
 
