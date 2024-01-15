@@ -48,7 +48,7 @@ func NewRaft(addr string, id string, storeDir string, fsm *FSM) (*raft.Raft, err
 	return rf, nil
 }
 
-func Bootstrap(rf *raft.Raft, cluster map[string]string) {
+func Bootstrap(rf *raft.Raft, raftId string, raftAddr string) {
 	servers := rf.GetConfiguration().Configuration().Servers
 	if len(servers) > 0 {
 		log.Fatal("Error checking existing server")
@@ -56,12 +56,12 @@ func Bootstrap(rf *raft.Raft, cluster map[string]string) {
 	}
 
 	var configuration raft.Configuration
-	for id, addr := range cluster {
-		server := raft.Server{
-			ID:      raft.ServerID(id),
-			Address: raft.ServerAddress(addr),
-		}
-		configuration.Servers = append(configuration.Servers, server)
+	// for id, addr := range cluster {
+	server := raft.Server{
+		ID:      raft.ServerID(raftId),
+		Address: raft.ServerAddress(raftAddr),
 	}
+	configuration.Servers = append(configuration.Servers, server)
+	// }
 	rf.BootstrapCluster(configuration)
 }

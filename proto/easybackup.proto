@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "github.com/skyline93/easybackup/proto";
+
+package proto;
+
+service ClusterManageService {
+    rpc AddNode(AddNodeRequest) returns (AddNodeResponse) {}
+}
+
+message AddNodeRequest {
+    string RaftId = 1;
+    string RaftAddr = 2;
+}
+
+message AddNodeResponse {
+    bool IsOk = 1;
+}
