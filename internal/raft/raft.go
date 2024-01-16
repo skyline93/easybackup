@@ -56,12 +56,11 @@ func Bootstrap(rf *raft.Raft, raftId string, raftAddr string) {
 	}
 
 	var configuration raft.Configuration
-	// for id, addr := range cluster {
 	server := raft.Server{
 		ID:      raft.ServerID(raftId),
 		Address: raft.ServerAddress(raftAddr),
 	}
 	configuration.Servers = append(configuration.Servers, server)
-	// }
+
 	rf.BootstrapCluster(configuration)
 }

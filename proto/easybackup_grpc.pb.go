@@ -20,6 +20,8 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	ClusterManageService_AddNode_FullMethodName = "/proto.ClusterManageService/AddNode"
+	ClusterManageService_Set_FullMethodName     = "/proto.ClusterManageService/Set"
+	ClusterManageService_Get_FullMethodName     = "/proto.ClusterManageService/Get"
 )
 
 // ClusterManageServiceClient is the client API for ClusterManageService service.
@@ -27,6 +29,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ClusterManageServiceClient interface {
 	AddNode(ctx context.Context, in *AddNodeRequest, opts ...grpc.CallOption) (*AddNodeResponse, error)
+	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
+	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 }
 
 type clusterManageServiceClient struct {
@@ -46,11 +50,31 @@ func (c *clusterManageServiceClient) AddNode(ctx context.Context, in *AddNodeReq
 	return out, nil
 }
 
+func (c *clusterManageServiceClient) Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error) {
+	out := new(SetResponse)
+	err := c.cc.Invoke(ctx, ClusterManageService_Set_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clusterManageServiceClient) Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error) {
+	out := new(GetResponse)
+	err := c.cc.Invoke(ctx, ClusterManageService_Get_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClusterManageServiceServer is the server API for ClusterManageService service.
 // All implementations must embed UnimplementedClusterManageServiceServer
 // for forward compatibility
 type ClusterManageServiceServer interface {
 	AddNode(context.Context, *AddNodeRequest) (*AddNodeResponse, error)
+	Set(context.Context, *SetRequest) (*SetResponse, error)
+	Get(context.Context, *GetRequest) (*GetResponse, error)
 	mustEmbedUnimplementedClusterManageServiceServer()
 }
 
@@ -60,6 +84,12 @@ type UnimplementedClusterManageServiceServer struct {
 
 func (UnimplementedClusterManageServiceServer) AddNode(context.Context, *AddNodeRequest) (*AddNodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddNode not implemented")
+}
+func (UnimplementedClusterManageServiceServer) Set(context.Context, *SetRequest) (*SetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Set not implemented")
+}
+func (UnimplementedClusterManageServiceServer) Get(context.Context, *GetRequest) (*GetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
 func (UnimplementedClusterManageServiceServer) mustEmbedUnimplementedClusterManageServiceServer() {}
 
@@ -92,6 +122,42 @@ func _ClusterManageService_AddNode_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClusterManageService_Set_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterManageServiceServer).Set(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClusterManageService_Set_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterManageServiceServer).Set(ctx, req.(*SetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClusterManageService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClusterManageServiceServer).Get(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClusterManageService_Get_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClusterManageServiceServer).Get(ctx, req.(*GetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClusterManageService_ServiceDesc is the grpc.ServiceDesc for ClusterManageService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,6 +168,14 @@ var ClusterManageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddNode",
 			Handler:    _ClusterManageService_AddNode_Handler,
+		},
+		{
+			MethodName: "Set",
+			Handler:    _ClusterManageService_Set_Handler,
+		},
+		{
+			MethodName: "Get",
+			Handler:    _ClusterManageService_Get_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
