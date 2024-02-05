@@ -40,7 +40,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 
 	var backupSets []repository.BackupSet
 
-	backupSet, err := repo.GetBackupSet(backupSetId)
+	backupSet, err := repo.GetBackupSet(repository.TypeData, backupSetId)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (r *Restorer) Restore(repo *repository.Repository, targetPath string, mysql
 	if backupSet.Type == repository.TypeBackupSetFull {
 		backupSets = append(backupSets, *backupSet)
 	} else if backupSet.Type == repository.TypeBackupSetIncr {
-		backupSets, err = repo.GetBeforeBackupSet(backupSetId)
+		backupSets, err = repo.GetBeforeBackupSet(repository.TypeData, backupSetId)
 		if err != nil {
 			return err
 		}

@@ -58,7 +58,7 @@ func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err e
 	}
 
 	if backupType == repository.TypeBackupSetIncr {
-		lastBackupSet, err := repo.GetLastBackupSet()
+		lastBackupSet, err := repo.GetLastBackupSet(repository.TypeData)
 		if err != nil {
 			return err
 		}
@@ -99,6 +99,7 @@ func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err e
 	bs.ToLSN = checkpoints["to_lsn"]
 	bs.Size = int64(size)
 	bs.BackupTime = backupTime
+	bs.DataType = repository.TypeData
 
 	if err = repo.AddBackupSet(bs); err != nil {
 		return err

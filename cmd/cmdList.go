@@ -22,7 +22,7 @@ var cmdBackupSet = &cobra.Command{
 	Use:   "backupset",
 	Short: "backupset",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := listBackupSets(listOptions.RepoPath); err != nil {
+		if err := listBackupSets(listOptions.RepoPath, listOptions.DataType); err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
 		}
@@ -31,6 +31,7 @@ var cmdBackupSet = &cobra.Command{
 
 type ListOptions struct {
 	RepoPath string
+	DataType string
 }
 
 var listOptions ListOptions
@@ -45,20 +46,26 @@ func init() {
 	cmdBackupSet.MarkFlagRequired("repo_path")
 }
 
-func listBackupSets(repoPath string) error {
+func listBackupSets(repoPath string, dataType string) error {
 	repo := repository.Repository{}
 	if err := repository.LoadRepository(&repo, repoPath); err != nil {
 		return err
 	}
 
-	backupSets, err := repo.ListBackupSets()
-	if err != nil {
-		return err
+	var backupSets []repository.BackupSet
+
+	for _, t := range []string{repository.TypeData, repository.TypeLog} {
+		results, err := repo.ListBackupSets(t)
+		if err != nil {
+			return err
+		}
+
+		backupSets = append(backupSets, results...)
 	}
 
-	items := pterm.TableData{{"BackupTime", "Id", "Type", "FromLSN", "ToLSN", "Size(Kb)"}}
+	items := pterm.TableData{{"BackupTime", "Id", "DataType", "Type", "FromLSN", "ToLSN", "Size(Kb)"}}
 	for _, bs := range backupSets {
-		item := []string{bs.BackupTime, bs.Id, bs.Type, bs.FromLSN, bs.ToLSN, fmt.Sprintf("%d", bs.Size/1024)}
+		item := []string{bs.BackupTime, bs.Id, bs.DataType, bs.Type, bs.FromLSN, bs.ToLSN, fmt.Sprintf("%d", bs.Size/1024)}
 		items = append(items, item)
 	}
 
