@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/skyline93/easybackup/internal/file"
 	"github.com/skyline93/easybackup/internal/mysql"
 	"github.com/skyline93/easybackup/internal/repository"
 	"github.com/spf13/cobra"
@@ -19,18 +20,29 @@ var cmdRestore = &cobra.Command{
 			os.Exit(1)
 		}
 
-		restorer := mysql.NewRestorer()
+		if restoreOptions.DataType == repository.TypeData {
+			restorer := mysql.NewRestorer()
 
-		err := restorer.Restore(&repo, restoreOptions.TargetPath, restoreOptions.MysqlPath, restoreOptions.BackupSetId)
-		if err != nil {
-			fmt.Printf("restore failed, err: %s", err)
-			os.Exit(1)
+			err := restorer.Restore(&repo, restoreOptions.TargetPath, restoreOptions.MysqlPath, restoreOptions.BackupSetId)
+			if err != nil {
+				fmt.Printf("restore failed, err: %s", err)
+				os.Exit(1)
+			}
+		} else if restoreOptions.DataType == repository.TypeLog {
+			restorer := file.NewRestorer()
+
+			err := restorer.Restore(&repo, restoreOptions.TargetPath, restoreOptions.BackupSetId)
+			if err != nil {
+				fmt.Printf("restore failed, err: %s", err)
+				os.Exit(1)
+			}
 		}
 	},
 }
 
 type RestoreOptions struct {
 	BackupSetId string
+	DataType    string
 	RepoPath    string
 	TargetPath  string
 	MysqlPath   string
@@ -46,6 +58,7 @@ func init() {
 	f.StringVarP(&restoreOptions.RepoPath, "repo_path", "p", "", "repo path")
 	f.StringVarP(&restoreOptions.TargetPath, "target_path", "t", "", "target path")
 	f.StringVarP(&restoreOptions.MysqlPath, "mysql_path", "m", "", "mysql path, example: /usr/local/mysql/8.0.28")
+	f.StringVarP(&restoreOptions.DataType, "data_type", "d", "", "data path")
 
 	cmdRestore.MarkFlagRequired("backupset_id")
 	cmdRestore.MarkFlagRequired("repo_path")

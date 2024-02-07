@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
+	"time"
 
 	"github.com/pterm/pterm"
 	"github.com/skyline93/easybackup/internal/repository"
@@ -46,13 +48,25 @@ func init() {
 	cmdBackupSet.MarkFlagRequired("repo_path")
 }
 
+type BackupSets []repository.BackupSet
+
+func (b BackupSets) Len() int { return len(b) }
+
+func (b BackupSets) Less(i, j int) bool {
+	n, _ := time.ParseInLocation("2006-01-02 15:04:05", b[i].BackupTime, time.Local)
+	m, _ := time.ParseInLocation("2006-01-02 15:04:05", b[j].BackupTime, time.Local)
+	return n.Unix() > m.Unix()
+}
+
+func (b BackupSets) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+
 func listBackupSets(repoPath string, dataType string) error {
 	repo := repository.Repository{}
 	if err := repository.LoadRepository(&repo, repoPath); err != nil {
 		return err
 	}
 
-	var backupSets []repository.BackupSet
+	var backupSets BackupSets
 
 	for _, t := range []string{repository.TypeData, repository.TypeLog} {
 		results, err := repo.ListBackupSets(t)
@@ -62,6 +76,8 @@ func listBackupSets(repoPath string, dataType string) error {
 
 		backupSets = append(backupSets, results...)
 	}
+
+	sort.Sort(backupSets)
 
 	items := pterm.TableData{{"BackupTime", "Id", "DataType", "Type", "FromLSN", "ToLSN", "Size(Kb)"}}
 	for _, bs := range backupSets {
