@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/skyline93/easybackup/internal/stor"
@@ -24,17 +27,50 @@ type BackupSet struct {
 	FromLSN    string `json:"from_lsn"`
 	ToLSN      string `json:"to_lsn"`
 	Size       int64  `json:"size"`
-	BackupTime string `json:"backup_time"`
+	BackupTime int64  `json:"backup_time"`
 	DataType   string `json:"data_type"`
 	Snapshot   string `json:"snapshot"`
+
+	repo *Repository
+}
+
+func (b *BackupSet) String() string {
+	d, _ := json.Marshal(b)
+	return string(d)
+}
+
+func (bs *BackupSet) Update(fieldsToUpdate map[string]interface{}) error {
+	if fieldsToUpdate == nil {
+		return errors.New("fieldsToUpdate is nil")
+	}
+
+	for key, value := range fieldsToUpdate {
+		switch key {
+		case "FromLSN":
+			bs.FromLSN = value.(string)
+		case "ToLSN":
+			bs.ToLSN = value.(string)
+		case "Size":
+			bs.Size = value.(int64)
+		case "BackupTime":
+			bs.BackupTime = value.(int64)
+		case "DataType":
+			bs.DataType = value.(string)
+		case "Snapshot":
+			bs.Snapshot = value.(string)
+		default:
+			return errors.New("unsupported field: " + key)
+		}
+	}
+
+	return nil
 }
 
 type Repository struct {
-	DataCol *stor.Collection
-	LogCol  *stor.Collection
-	Config  *Config
-	Path    string `json:"path"`
-	Name    string `json:"name"`
+	colMap map[string]*stor.Collection
+	Config *Config
+	Path   string `json:"path"`
+	Name   string `json:"name"`
 }
 
 func NewBackupSet(backupSetType string) *BackupSet {
@@ -46,10 +82,9 @@ func NewBackupSet(backupSetType string) *BackupSet {
 
 func NewRepository(name string, config *Config) *Repository {
 	return &Repository{
-		DataCol: stor.NewCollection(),
-		LogCol:  stor.NewCollection(),
-		Name:    name,
-		Config:  config,
+		colMap: make(map[string]*stor.Collection),
+		Name:   name,
+		Config: config,
 	}
 }
 
@@ -74,13 +109,21 @@ func LoadRepository(repo *Repository, path string) error {
 		return err
 	}
 
-	repo.DataCol = &dataCol
-	repo.LogCol = &logCol
+	repo.colMap[TypeData] = &dataCol
+	repo.colMap[TypeLog] = &logCol
 	repo.Config = &conf
 	repo.Name = conf.Identifer
 	repo.Path = path
 
 	return nil
+}
+
+func (r *Repository) getCollection(backupDataType string) (*stor.Collection, error) {
+	col, found := r.colMap[backupDataType]
+	if !found {
+		return nil, errors.New("unsupported backup data type: " + backupDataType)
+	}
+	return col, nil
 }
 
 func (r *Repository) Init(path string) error {
@@ -108,62 +151,87 @@ func (r *Repository) Init(path string) error {
 		return err
 	}
 
-	if err = stor.Serialize(r.DataCol, filepath.Join(r.Path, "data.index")); err != nil {
+	if err = stor.Serialize(r.colMap[TypeData], filepath.Join(r.Path, "data.index")); err != nil {
 		return err
 	}
 
-	if err = stor.Serialize(r.LogCol, filepath.Join(r.Path, "log.index")); err != nil {
+	if err = stor.Serialize(r.colMap[TypeLog], filepath.Join(r.Path, "log.index")); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *Repository) AddBackupSet(backupSet *BackupSet) error {
-	v, err := json.Marshal(backupSet)
+func (bs *BackupSet) Path() string {
+	path, _ := filepath.Abs(filepath.Join(bs.repo.DataPath(), bs.Id))
+	return path
+}
+
+func (bs *BackupSet) GetSize() (uint64, error) {
+	cmd := exec.Command("du", "-sb", bs.Path())
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	var (
-		col       *stor.Collection
-		indexName string
-	)
+	// 解析 du 输出获取备份数据量
+	fields := strings.Fields(string(output))
+	size, err := strconv.ParseUint(fields[0], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
 
-	if backupSet.DataType == TypeData {
-		col = r.DataCol
-		indexName = "data.index"
-	} else if backupSet.DataType == TypeLog {
-		col = r.LogCol
-		indexName = "log.index"
+func (r *Repository) CreateBackupSet(backupSetType string) (*BackupSet, error) {
+	id := uuid.New().String()
+
+	bakSet := &BackupSet{
+		Id:   id,
+		Type: backupSetType,
 	}
 
-	if backupSet.Type == TypeBackupSetFull {
-		_, err := col.NewNode(backupSet.Id, v, true)
+	if _, err := os.Stat(bakSet.Path()); os.IsNotExist(err) {
+		err = os.MkdirAll(bakSet.Path(), 0775)
 		if err != nil {
-			return err
+			return nil, err
 		}
-	} else if backupSet.Type == TypeBackupSetIncr {
-		_, err := col.NewNode(backupSet.Id, v, false)
+	}
+
+	v, err := json.Marshal(bakSet)
+	if err != nil {
+		return nil, err
+	}
+
+	col, err := r.getCollection(bakSet.DataType)
+	if err != nil {
+		return nil, err
+	}
+
+	if bakSet.Type == TypeBackupSetFull {
+		_, err := col.NewNode(bakSet.Id, v, true)
 		if err != nil {
-			return err
+			return nil, err
+		}
+	} else if bakSet.Type == TypeBackupSetIncr {
+		_, err := col.NewNode(bakSet.Id, v, false)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if err := stor.Serialize(col, filepath.Join(r.Path, indexName)); err != nil {
-		return err
-	}
+	return bakSet, nil
+}
 
-	return nil
+func (c *Repository) DeleteBackupSet(bakSet *BackupSet) error {
+	return os.RemoveAll(bakSet.Path())
 }
 
 func (r *Repository) GetBackupSet(backupDataType string, backupSetId string) (*BackupSet, error) {
-	var col *stor.Collection
-
-	if backupDataType == TypeData {
-		col = r.DataCol
-	} else if backupDataType == TypeLog {
-		col = r.LogCol
+	col, err := r.getCollection(backupDataType)
+	if err != nil {
+		return nil, err
 	}
 
 	n := col.GetNode(backupSetId)
@@ -178,13 +246,11 @@ func (r *Repository) GetBackupSet(backupDataType string, backupSetId string) (*B
 func (r *Repository) GetBeforeBackupSet(backupDataType string, backupSetId string) ([]BackupSet, error) {
 	var (
 		backupSets []BackupSet
-		col        *stor.Collection
 	)
 
-	if backupDataType == TypeData {
-		col = r.DataCol
-	} else if backupDataType == TypeLog {
-		col = r.LogCol
+	col, err := r.getCollection(backupDataType)
+	if err != nil {
+		return nil, err
 	}
 
 	nodes := col.GetBeforeNodes(backupSetId)
@@ -202,12 +268,9 @@ func (r *Repository) GetBeforeBackupSet(backupDataType string, backupSetId strin
 }
 
 func (r *Repository) GetLastBackupSet(backupDataType string) (*BackupSet, error) {
-	var col *stor.Collection
-
-	if backupDataType == TypeData {
-		col = r.DataCol
-	} else if backupDataType == TypeLog {
-		col = r.LogCol
+	col, err := r.getCollection(backupDataType)
+	if err != nil {
+		return nil, err
 	}
 
 	n := col.GetLastNode()
@@ -233,13 +296,11 @@ func (r *Repository) SnapshotPath() string {
 func (r *Repository) ListBackupSets(backupDataType string) ([]BackupSet, error) {
 	var (
 		backupSets []BackupSet
-		col        *stor.Collection
 	)
 
-	if backupDataType == TypeData {
-		col = r.DataCol
-	} else if backupDataType == TypeLog {
-		col = r.LogCol
+	col, err := r.getCollection(backupDataType)
+	if err != nil {
+		return nil, err
 	}
 
 	ns := col.GetAllNodes()

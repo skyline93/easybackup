@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,90 +22,106 @@ func NewBackuper() *Backuper {
 }
 
 func (b *Backuper) Backup(repo *repository.Repository, backupType string) (err error) {
-	bs := repository.NewBackupSet(backupType)
-	targetPath, err := filepath.Abs(filepath.Join(repo.DataPath(), bs.Id))
+	var (
+		bakSet     *repository.BackupSet
+		lastBakSet *repository.BackupSet
+	)
+
+	bakSet, err = repo.CreateBackupSet(backupType)
 	if err != nil {
 		return err
-	}
-
-	if _, err = os.Stat(targetPath); os.IsNotExist(err) {
-		err = os.MkdirAll(targetPath, 0755)
-		if err != nil {
-			return err
-		}
-		log.Infof("create path: %s", targetPath)
 	}
 
 	defer func() {
 		if err != nil {
 			log.Infof("backup failed, err: %s", err)
-			os.RemoveAll(targetPath)
+			err = repo.DeleteBackupSet(bakSet)
 		}
 	}()
 
-	backupArgs := []string{
-		filepath.Join(repo.Config.BinPath, "xtrabackup"),
-		"--backup",
-		fmt.Sprintf("--throttle=%d", repo.Config.Throttle),
-		fmt.Sprintf("--login-path=%s", repo.Config.LoginPath),
-		fmt.Sprintf("--datadir=%s", repo.Config.DataPath),
-		"--stream=xbstream",
-	}
-
-	if repo.Config.TryCompress {
-		backupArgs = append(backupArgs, "--compress")
-	}
-
 	if backupType == repository.TypeBackupSetIncr {
-		lastBackupSet, err := repo.GetLastBackupSet(repository.TypeData)
+		lastBakSet, err = repo.GetLastBackupSet(repository.TypeData)
 		if err != nil {
 			return err
 		}
-
-		backupArgs = append(backupArgs, fmt.Sprintf("--incremental-lsn=%s", lastBackupSet.ToLSN))
 	}
 
-	streamArgs := []string{
-		"ssh", fmt.Sprintf("%s@%s", repo.Config.BackupUser, repo.Config.BackupHostName),
-		filepath.Join(repo.Config.BinPath, "xbstream"), "-x", "-C", targetPath,
-	}
+	backupTime := time.Now().UnixNano()
 
-	args := append(append(backupArgs, []string{"|"}...), streamArgs...)
-
-	backupTime := time.Now().Format("2006-01-02 15:04:05")
-	cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", repo.Config.DbUser, repo.Config.DbHostName), strings.Join(args, " "))
-	log.Infof("cmd: %s", cmd.String())
-	if err = cmd.Run(); err != nil {
+	result, err := b.runXtrabackup(*repo.Config, lastBakSet.FromLSN, bakSet.Path())
+	if err != nil {
 		return err
+	}
+
+	size, err := bakSet.GetSize()
+	if err != nil {
+		return err
+	}
+
+	if err = bakSet.Update(map[string]interface{}{
+		"FromLSN":    result.FromLSN,
+		"ToLSN":      result.ToLSN,
+		"Size":       int64(size),
+		"BackupTime": backupTime,
+		"DataType":   repository.TypeData,
+	}); err != nil {
+		return err
+	}
+
+	log.Infof("backup completed.\nbackupset: %s", bakSet)
+	return nil
+}
+
+type xtarbackupResult struct {
+	FromLSN string
+	ToLSN   string
+}
+
+func (b *Backuper) runXtrabackup(config repository.Config, startLsn string, targetPath string) (*xtarbackupResult, error) {
+	sourceArgs := []string{
+		filepath.Join(config.BinPath, "xtrabackup"),
+		"--backup",
+		fmt.Sprintf("--throttle=%d", config.Throttle),
+		fmt.Sprintf("--login-path=%s", config.LoginPath),
+		fmt.Sprintf("--datadir=%s", config.DataPath),
+		"--stream=xbstream",
+	}
+
+	if config.TryCompress {
+		sourceArgs = append(sourceArgs, "--compress")
+	}
+
+	if startLsn != "" {
+		sourceArgs = append(sourceArgs, fmt.Sprintf("--incremental-lsn=%s", startLsn))
+	}
+
+	targetArgs := []string{
+		"ssh", fmt.Sprintf("%s@%s", config.BackupUser, config.BackupHostName),
+		filepath.Join(config.BinPath, "xbstream"), "-x", "-C", targetPath,
+	}
+
+	args := append(append(sourceArgs, []string{"|"}...), targetArgs...)
+
+	cmd := exec.Command("ssh", fmt.Sprintf("%s@%s", config.DbUser, config.DbHostName), strings.Join(args, " "))
+	log.Infof("cmd: %s", cmd.String())
+	if err := cmd.Run(); err != nil {
+		return nil, err
 	}
 
 	content, err := os.ReadFile(filepath.Join(targetPath, "xtrabackup_checkpoints"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	checkpoints, err := b.parseCheckpoints(string(content))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	size, err := b.getBackupSize(targetPath)
-	if err != nil {
-		return err
-	}
-
-	bs.FromLSN = checkpoints["from_lsn"]
-	bs.ToLSN = checkpoints["to_lsn"]
-	bs.Size = int64(size)
-	bs.BackupTime = backupTime
-	bs.DataType = repository.TypeData
-
-	if err = repo.AddBackupSet(bs); err != nil {
-		return err
-	}
-
-	log.Infof("backup completed.\nbackupset: %s\nfrom_lsn: %s\nto_lsn: %s\nsize: %dbyte", bs.Id, bs.FromLSN, bs.ToLSN, bs.Size)
-	return nil
+	return &xtarbackupResult{
+		FromLSN: checkpoints["from_lsn"],
+		ToLSN:   checkpoints["to_lsn"],
+	}, nil
 }
 
 func (b *Backuper) parseCheckpoints(content string) (map[string]string, error) {
@@ -128,21 +143,4 @@ func (b *Backuper) parseCheckpoints(content string) (map[string]string, error) {
 	}
 
 	return checkpointsMap, nil
-}
-
-func (b *Backuper) getBackupSize(targetPath string) (uint64, error) {
-	cmd := exec.Command("du", "-sb", targetPath)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return 0, err
-	}
-
-	// 解析 du 输出获取备份数据量
-	fields := strings.Fields(string(output))
-	size, err := strconv.ParseUint(fields[0], 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return size, nil
 }
